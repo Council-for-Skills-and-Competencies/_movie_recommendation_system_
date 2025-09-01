@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>🎬 Movie Recommender</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: url('https://images.unsplash.com/photo-1517602302552-471fe67acf66?ixlib=rb-4.0.3&auto=format&fit=crop&w=1950&q=80') no-repeat center center fixed;
+      background-size: cover;
+      color: #333;
+    }
+    .overlay {
+      background: rgba(255, 255, 255, 0.8);
+      min-height: 100vh;
+      padding: 40px 20px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .container {
+      max-width: 900px;
+      width: 100%;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(8px);
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+    }
+    h2 {
+      text-align: center;
+      color: #222;
+      margin-bottom: 30px;
+    }
+    input[type="text"], input[type="number"], select {
+      width: 100%;
+      padding: 14px;
+      font-size: 16px;
+      margin-bottom: 20px;
+      border: 2px solid #ddd;
+      border-radius: 6px;
+      transition: border-color 0.3s;
+    }
+    input[type="text"]:focus, input[type="number"]:focus, select:focus {
+      border-color: #0077ff;
+      outline: none;
+    }
+    button {
+      width: 100%;
+      padding: 14px;
+      font-size: 16px;
+      background: #0077ff;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.3s, transform 0.2s;
+    }
+    button:hover {
+      background: #005fcc;
+      transform: translateY(-2px);
+    }
+    .movie-list, .recommendations {
+      margin-top: 30px;
+    }
+    ul {
+      list-style: none;
+      padding: 0;
+    }
+    li {
+      background: #f9f9f9;
+      margin: 10px 0;
+      padding: 15px;
+      border-radius: 6px;
+      transition: background 0.3s;
+    }
+    li:hover {
+      background: #f0f0f0;
+    }
+    .genres {
+      display: block;
+      font-size: 14px;
+      color: #555;
+      margin-top: 6px;
+    }
+    .no-results {
+      background: #ffeaea;
+      border: 1px solid #f3c2c2;
+      padding: 12px;
+      border-radius: 6px;
+      color: #a00;
+      margin-top: 10px;
+    }
+    @media(max-width:600px){
+      .container{
+        padding:20px;
+      }
+    }
+  </style>
+</head>
+<body>
+<div class="overlay">
+  <div class="container">
+    <h2>🎬 Movie Recommendation System</h2>
+    <input type="text" id="movieInput" placeholder="Enter a movie title (e.g., Toy Story (1995))" />
+    <input type="number" id="numRecommendations" placeholder="Enter number of recommendations (e.g., 5)" min="1" max="20" />
+    <select id="genreSelect">
+      <option value="">-- Select Genre --</option>
+    </select>
+    <button onclick="handleRecommendation()">Get Recommendations</button>
+    <div class="recommendations" id="recommendations"></div>
+    <div class="movie-list" id="movieList"></div>
+  </div>
+</div>
+
+<script>
+  let movies = [];
+
+  fetch('movies.csv')
+    .then(response => response.text())
+    .then(data => {
+      const lines = data.trim().split('\n');
+      lines.shift();
+      lines.forEach(line => {
+        const parts = line.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/);
+        const title = parts[1].replace(/^"|"$/g, '');
+        const genres = parts[2] ? parts[2].split('|') : [];
+        movies.push({ title, genres });
+      });
+      populateGenres();
+    });
+
+  function populateGenres() {
+    const genreSet = new Set();
+    movies.forEach(m => {
+      m.genres.forEach(g => {
+        const cleaned = g.trim().toLowerCase();
+        if (cleaned) genreSet.add(cleaned);
+      });
+    });
+    const genreSelect = document.getElementById('genreSelect');
+    [...genreSet].sort().forEach(genre => {
+      const option = document.createElement('option');
+      option.value = genre;
+      option.textContent = genre.charAt(0).toUpperCase() + genre.slice(1);
+      genreSelect.appendChild(option);
+    });
+  }
+
+  function handleRecommendation() {
+    const input = document.getElementById('movieInput').value.trim().toLowerCase();
+    const genre = document.getElementById('genreSelect').value;
+    const resultDiv = document.getElementById('recommendations');
+    const movieListDiv = document.getElementById('movieList');
+
+    resultDiv.innerHTML = "";
+    movieListDiv.innerHTML = "";
+
+    if (input) {
+      recommendByTitle(input);
+    } else if (genre) {
+      displayMoviesByGenre(genre);
+    } else {
+      resultDiv.innerHTML = `<div class="no-results">Please enter a movie title or select a genre.</div>`;
+    }
+  }
+
+  function recommendByTitle(input) {
+    const resultDiv = document.getElementById('recommendations');
+    const numRecommendations = parseInt(document.getElementById('numRecommendations').value) || 5;
+    const targetMovie = movies.find(m => m.title.toLowerCase() === input);
+
+    if (!targetMovie) {
+      resultDiv.innerHTML = `<div class="no-results">No movie found matching "<strong>${input}</strong>".</div>`;
+      return;
+    }
+
+    const targetGenres = targetMovie.genres;
+
+    let output = `<h3>🎬 ${targetMovie.title}</h3>`;
+    output += `<span class="genres"><strong>Genres:</strong> ${targetGenres.join(', ') || 'None'}</span>`;
+
+    const recommendations = movies
+      .filter(m => m.title !== targetMovie.title)
+      .map(m => {
+        const overlap = m.genres.filter(g => targetGenres.includes(g)).length;
+        return { title: m.title, genres: m.genres, score: overlap };
+      })
+      .filter(m => m.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, numRecommendations);
+
+    if (recommendations.length === 0) {
+      resultDiv.innerHTML = output + "<p>No similar movies found.</p>";
+      return;
+    }
+
+    output += `<h4>Recommended Movies:</h4><ul>`;
+    recommendations.forEach(rec => {
+      output += `
+        <li>
+          <strong>${rec.title}</strong>
+          <span class="genres"><strong>Genres:</strong> ${rec.genres.join(', ')}</span>
+          <span class="genres"><strong>Shared genres:</strong> ${rec.score}</span>
+        </li>`;
+    });
+    output += "</ul>";
+    resultDiv.innerHTML = output;
+  }
+
+  function displayMoviesByGenre(genre) {
+    const movieListDiv = document.getElementById('movieList');
+    const numRecommendations = parseInt(document.getElementById('numRecommendations').value) || 5;
+
+    const filtered = movies.filter(m =>
+      m.genres.some(g => g.trim().toLowerCase() === genre)
+    ).slice(0, numRecommendations);
+
+    if (filtered.length === 0) {
+      movieListDiv.innerHTML = "<div class='no-results'>No movies found for this genre.</div>";
+      return;
+    }
+
+    let content = `<h3>Top ${filtered.length} Movies in "${genre.charAt(0).toUpperCase() + genre.slice(1)}"</h3><ul>`;
+    filtered.forEach(m => {
+      content += `
+        <li>
+          <strong>${m.title}</strong>
+          <span class="genres"><strong>Genres:</strong> ${m.genres.join(', ')}</span>
+        </li>`;
+    });
+    content += "</ul>";
+    movieListDiv.innerHTML = content;
+  }
+</script>
+</body>
+</html>
